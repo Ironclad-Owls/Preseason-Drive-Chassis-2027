@@ -1,0 +1,27 @@
+# Gradle build files
+build/
+.gradle/
+
+# IDE / Editor files
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/extensions.json
+.idea/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+bin/
+
+# WPILib / CTRE / PathPlanner temp files
+.wpilib/wpilib_cache.json
+sysid/
+*.csv
+*.wpilog
+
+# OS generated files
+.DS_Store
+Thumbs.db
