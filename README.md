@@ -228,18 +228,18 @@ Every CTRE device on the CAN bus must have a unique CAN ID:
 [RoboRIO 1] ====== CAN BUS ("rio") ======+
                                          |--- Pigeon 2 (ID 13)
                                          |
-                                         |--- Front Left:  Drive (ID 1),  Steer (ID 2),  CANcoder (ID 3)
-                                         |--- Front Right: Drive (ID 4),  Steer (ID 5),  CANcoder (ID 6)
-                                         |--- Back Left:   Drive (ID 7),  Steer (ID 8),  CANcoder (ID 9)
-                                         +--- Back Right:  Drive (ID 10), Steer (ID 11), CANcoder (ID 12)
+                                         |--- Front Left:  Drive (ID 1),  Steer (ID 2),  CANcoder (ID 9)
+                                         |--- Front Right: Drive (ID 3),  Steer (ID 4),  CANcoder (ID 10)
+                                         |--- Back Left:   Drive (ID 5),  Steer (ID 6),  CANcoder (ID 11)
+                                         +--- Back Right:  Drive (ID 7),  Steer (ID 8),  CANcoder (ID 12)
 ```
 
 | Module Location | Drive Motor (Kraken X60) | Steer Motor (Kraken X44) | Absolute Encoder (CANcoder) |
 | :--- | :---: | :---: | :---: |
-| **Front Left (FL)** | `1` | `2` | `3` |
-| **Front Right (FR)** | `4` | `5` | `6` |
-| **Back Left (BL)** | `7` | `8` | `9` |
-| **Back Right (BR)** | `10` | `11` | `12` |
+| **Front Left (FL)** | `1` | `2` | `9` |
+| **Front Right (FR)** | `3` | `4` | `10` |
+| **Back Left (BL)** | `5` | `6` | `11` |
+| **Back Right (BR)** | `7` | `8` | `12` |
 | **IMU / Gyro** | — | — | **Pigeon 2**: `13` |
 
 ---
@@ -256,7 +256,7 @@ sequenceDiagram
 
     Tech->>Robot: Align all 4 wheels straight with straightedge (bevels facing left)
     Tech->>Tuner: Connect to RoboRIO ("rio" CAN bus)
-    Tuner->>Robot: Read Absolute Position of CANcoders (IDs 3, 6, 9, 12)
+    Tuner->>Robot: Read Absolute Position of CANcoders (IDs 9, 10, 11, 12)
     Tech->>Config: Copy negated readings into FL/FR/BL/BR_CANCODER_OFFSET
     Tech->>Robot: Build & Deploy code
     Tech->>Robot: Enable Teleop; push stick forward -> wheels drive straight!
@@ -266,9 +266,9 @@ sequenceDiagram
 2. **Mechanically align all 4 wheels** straight forward using a flat 1x1 aluminum extrusion pressed against the wheels. Ensure all bevel gears face the **LEFT** side of the chassis (or your team standard).
 3. **Open CTRE Phoenix Tuner X** on your laptop and connect to the robot via USB or radio.
 4. Go to **Devices** on the `rio` CAN bus and locate each CANcoder:
-   - Front Left: CANcoder `3`
-   - Front Right: CANcoder `6`
-   - Back Left: CANcoder `9`
+   - Front Left: CANcoder `9`
+   - Front Right: CANcoder `10`
+   - Back Left: CANcoder `11`
    - Back Right: CANcoder `12`
 5. Note down the **Absolute Position** value (in rotations, ranging between `-0.5` and `+0.5`).
 6. Open **[`SwerveConfig.java`](file:///Users/adonai/Developer/Ironclad/Preseason-Drive-Chassis-2027/src/main/java/frc/robot/configs/SwerveConfig.java)** and enter the **negative** of each measured angle:
