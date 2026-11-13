@@ -1,0 +1,54 @@
+{
+  "fileName": "Phoenix6.json",
+  "name": "CTRE-Phoenix (v6)",
+  "version": "25.3.0",
+  "frcYear": "2025",
+  "uuid": "e995de00-2c64-4df5-8831-c1441420ff19",
+  "mavenUrls": [
+    "https://maven.ctr-electronics.com/release/"
+  ],
+  "jsonUrl": "https://maven.ctr-electronics.com/release/com/ctre/phoenix6/latest/Phoenix6-frc2025-latest.json",
+  "javaDependencies": [
+    {
+      "groupId": "com.ctre.phoenix6",
+      "artifactId": "wpiapi-java",
+      "version": "25.3.0"
+    }
+  ],
+  "jniDependencies": [
+    {
+      "groupId": "com.ctre.phoenix6",
+      "artifactId": "wpiapi-cpp",
+      "version": "25.3.0",
+      "isJar": false,
+      "skipInvalidPlatforms": true,
+      "validPlatforms": [
+        "linuxathena",
+        "linuxraspbian",
+        "linuxaarch64bionic",
+        "windowsx86-64",
+        "linuxx86-64",
+        "osxuniversal"
+      ]
+    }
+  ],
+  "cppDependencies": [
+    {
+      "groupId": "com.ctre.phoenix6",
+      "artifactId": "wpiapi-cpp",
+      "version": "25.3.0",
+      "libName": "CTRE_Phoenix6_WPI",
+      "headerClassifier": "headers",
+      "sharedLibrary": true,
+      "skipInvalidPlatforms": true,
+      "binaryPlatforms": [
+        "linuxathena",
+        "linuxraspbian",
+        "linuxaarch64bionic",
+        "windowsx86-64",
+        "linuxx86-64",
+        "osxuniversal"
+      ]
+    }
+  ]
+}
