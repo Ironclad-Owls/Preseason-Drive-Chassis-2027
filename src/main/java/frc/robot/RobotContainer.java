@@ -12,7 +12,10 @@ import com.ctre.phoenix6.swerve.SwerveRequest;
 
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.filter.SlewRateLimiter;
+import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.wpilibj.Timer;
+import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
@@ -60,9 +63,12 @@ public class RobotContainer {
     private final CommandXboxController joystick = new CommandXboxController(0);
 
     public final CommandSwerveDrivetrain drivetrain = TunerConstants.createDrivetrain();
-    
+
+    private final SendableChooser<Command> autoChooser = new SendableChooser<>();
+
     public RobotContainer() {
         configureBindings();
+        configureAutoChooser();
     }
 
     private void configureBindings() {
@@ -142,28 +148,115 @@ public class RobotContainer {
         joystick.start().and(joystick.y()).whileTrue(drivetrain.sysIdQuasistatic(Direction.kForward));
         joystick.start().and(joystick.x()).whileTrue(drivetrain.sysIdQuasistatic(Direction.kReverse));
 
-        // Reset the field-centric heading on left bumper press.
-        joystick.leftBumper().onTrue(drivetrain.runOnce(drivetrain::seedFieldCentric));
+        // Reset the field-centric heading on Select (Back) button press.
+        joystick.back().onTrue(drivetrain.runOnce(drivetrain::seedFieldCentric));
 
         drivetrain.registerTelemetry(logger::telemeterize);
     }
 
-    public Command getAutonomousCommand() {
-        // Simple drive forward auton
-        final var idle = new SwerveRequest.Idle();
+    private Command driveToPoint(double targetX, double targetY) {
+        final var autoDrive = new SwerveRequest.FieldCentric()
+            .withDriveRequestType(DriveRequestType.OpenLoopVoltage)
+            .withSteerRequestType(SteerRequestType.MotionMagicExpo)
+            .withForwardPerspective(SwerveRequest.ForwardPerspectiveValue.BlueAlliance)
+            .withDesaturateWheelSpeeds(true);
+
+        return drivetrain.applyRequest(() -> {
+            Pose2d pose = drivetrain.getState().Pose;
+            double dx = targetX - pose.getX();
+            double dy = targetY - pose.getY();
+            double dist = Math.hypot(dx, dy);
+
+            double vx = 0.0;
+            double vy = 0.0;
+            if (dist > 1e-4) {
+                double speed = MathUtil.clamp(dist * 2.0, 0.0, 1.0);
+                vx = speed * (dx / dist);
+                vy = speed * (dy / dist);
+            }
+
+            double headingError = MathUtil.angleModulus(-pose.getRotation().getRadians());
+            double omega = MathUtil.clamp(headingError * 3.0, -1.5, 1.5);
+
+            return autoDrive.withVelocityX(vx)
+                .withVelocityY(vy)
+                .withRotationalRate(omega);
+        })
+        .until(() -> {
+            Pose2d pose = drivetrain.getState().Pose;
+            return Math.hypot(targetX - pose.getX(), targetY - pose.getY()) < 0.04;
+        })
+        .withTimeout(4.0);
+    }
+
+    private Command driveSpinningCircle(double diameterMeters, double durationSeconds, double spinRadPerSec) {
+        final var autoDrive = new SwerveRequest.FieldCentric()
+            .withDriveRequestType(DriveRequestType.OpenLoopVoltage)
+            .withSteerRequestType(SteerRequestType.MotionMagicExpo)
+            .withForwardPerspective(SwerveRequest.ForwardPerspectiveValue.BlueAlliance)
+            .withDesaturateWheelSpeeds(true);
+
+        final Timer timer = new Timer();
+        final double radius = diameterMeters / 2.0;
+        final double pathOmega = (2.0 * Math.PI) / durationSeconds;
+
         return Commands.sequence(
-            // Reset our field centric heading to match the robot
-            // facing away from our alliance station wall (0 deg).
+            drivetrain.runOnce(() -> {
+                drivetrain.resetPose(Pose2d.kZero);
+                timer.restart();
+            }),
+            drivetrain.applyRequest(() -> {
+                double t = Math.min(timer.get(), durationSeconds);
+                double theta = pathOmega * t;
+                double targetX = radius * (1.0 - Math.cos(theta));
+                double targetY = radius * Math.sin(theta);
+
+                Pose2d pose = drivetrain.getState().Pose;
+                double vx = radius * pathOmega * Math.sin(theta) + 2.0 * (targetX - pose.getX());
+                double vy = radius * pathOmega * Math.cos(theta) + 2.0 * (targetY - pose.getY());
+
+                return autoDrive.withVelocityX(vx)
+                    .withVelocityY(vy)
+                    .withRotationalRate(spinRadPerSec);
+            }).until(() -> timer.hasElapsed(durationSeconds))
+        );
+    }
+
+    private void configureAutoChooser() {
+        final var idle = new SwerveRequest.Idle();
+
+        Command squareAuto = Commands.sequence(
+            drivetrain.runOnce(() -> drivetrain.resetPose(Pose2d.kZero)),
+            driveToPoint(1.0, 0.0),
+            driveToPoint(1.0, 1.0),
+            driveToPoint(0.0, 1.0),
+            driveToPoint(0.0, 0.0),
+            drivetrain.applyRequest(() -> idle)
+        ).withName("Auto Square");
+
+        Command driveForwardAuto = Commands.sequence(
             drivetrain.runOnce(() -> drivetrain.seedFieldCentric(Rotation2d.kZero)),
-            // Then slowly drive forward (away from us) for 5 seconds.
             drivetrain.applyRequest(() ->
                 drive.withVelocityX(0.5)
                     .withVelocityY(0)
                     .withRotationalRate(0)
-            )
-            .withTimeout(5.0),
-            // Finally idle for the rest of auton
+            ).withTimeout(5.0),
             drivetrain.applyRequest(() -> idle)
-        );
+        ).withName("Drive Forward");
+
+        Command spinningCircleAuto = Commands.sequence(
+            driveSpinningCircle(1.0, 4.0, Math.PI),
+            drivetrain.applyRequest(() -> idle)
+        ).withName("Spinning Circle");
+
+        autoChooser.setDefaultOption("Auto Square", squareAuto);
+        autoChooser.addOption("Spinning Circle", spinningCircleAuto);
+        autoChooser.addOption("Drive Forward", driveForwardAuto);
+        autoChooser.addOption("Do Nothing", Commands.none().withName("Do Nothing"));
+        SmartDashboard.putData("Auto Mode", autoChooser);
+    }
+
+    public Command getAutonomousCommand() {
+        return autoChooser.getSelected();
     }
 }
