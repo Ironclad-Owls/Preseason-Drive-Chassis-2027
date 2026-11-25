@@ -6,7 +6,10 @@ package frc.robot;
 
 import com.ctre.phoenix6.HootAutoReplay;
 
+import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.TimedRobot;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 
@@ -14,6 +17,8 @@ public class Robot extends TimedRobot {
     private Command m_autonomousCommand;
 
     private final RobotContainer m_robotContainer;
+    private double m_minBatteryVoltage = RobotController.getBatteryVoltage();
+    private boolean m_wasEnabled = false;
 
     /* log and replay timestamp and joystick data */
     private final HootAutoReplay m_timeAndJoystickReplay = new HootAutoReplay()
@@ -27,7 +32,19 @@ public class Robot extends TimedRobot {
     @Override
     public void robotPeriodic() {
         m_timeAndJoystickReplay.update();
-        CommandScheduler.getInstance().run(); 
+        CommandScheduler.getInstance().run();
+
+        double batteryVoltage = RobotController.getBatteryVoltage();
+        boolean isEnabled = DriverStation.isEnabled();
+        if (isEnabled && !m_wasEnabled) {
+            m_minBatteryVoltage = batteryVoltage;
+        } else if (isEnabled) {
+            m_minBatteryVoltage = Math.min(m_minBatteryVoltage, batteryVoltage);
+        }
+        m_wasEnabled = isEnabled;
+
+        SmartDashboard.putNumber("Battery/Voltage", Math.round(batteryVoltage * 10.0) / 10.0);
+        SmartDashboard.putNumber("Battery/MinVoltageSinceEnabled", Math.round(m_minBatteryVoltage * 10.0) / 10.0);
     }
 
     @Override

@@ -69,6 +69,7 @@ public class RobotContainer {
     public RobotContainer() {
         configureBindings();
         configureAutoChooser();
+        drivetrain.resetRotation(Rotation2d.k180deg);
     }
 
     private void configureBindings() {
