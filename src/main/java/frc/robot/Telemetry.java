@@ -104,6 +104,27 @@ public class Telemetry {
         SignalLogger.writeDouble("DriveState/OdometryPeriod", state.OdometryPeriod, "seconds");
         SignalLogger.writeInteger("DriveState/FailedDaqs", state.FailedDaqs);
 
+        /* Log module 0-3 target vs actual angles and speeds */
+        for (int i = 0; i < 4; i++) {
+            if (state.ModuleTargets != null && i < state.ModuleTargets.length &&
+                state.ModuleStates != null && i < state.ModuleStates.length) {
+                double targetDeg = state.ModuleTargets[i].angle.getDegrees();
+                double actualDeg = state.ModuleStates[i].angle.getDegrees();
+                double targetSpeed = state.ModuleTargets[i].speedMetersPerSecond;
+                double actualSpeed = state.ModuleStates[i].speedMetersPerSecond;
+
+                SmartDashboard.putNumber("Swerve/Mod" + i + "/TargetAngleDeg", targetDeg);
+                SmartDashboard.putNumber("Swerve/Mod" + i + "/ActualAngleDeg", actualDeg);
+                SmartDashboard.putNumber("Swerve/Mod" + i + "/AngleErrorDeg", targetDeg - actualDeg);
+                SmartDashboard.putNumber("Swerve/Mod" + i + "/TargetSpeedMPS", targetSpeed);
+                SmartDashboard.putNumber("Swerve/Mod" + i + "/ActualSpeedMPS", actualSpeed);
+
+                SignalLogger.writeDouble("Swerve/Mod" + i + "/TargetAngleDeg", targetDeg, "deg");
+                SignalLogger.writeDouble("Swerve/Mod" + i + "/ActualAngleDeg", actualDeg, "deg");
+                SignalLogger.writeDouble("Swerve/Mod" + i + "/TargetSpeedMPS", targetSpeed, "mps");
+            }
+        }
+
         /* Telemeterize the pose to a Field2d */
         fieldTypePub.set("Field2d");
 
