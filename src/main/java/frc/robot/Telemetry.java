@@ -3,6 +3,7 @@ package frc.robot;
 import com.ctre.phoenix6.SignalLogger;
 import com.ctre.phoenix6.swerve.SwerveDrivetrain.SwerveDriveState;
 
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.kinematics.SwerveModulePosition;
@@ -50,6 +51,27 @@ public class Telemetry {
     private final StructArrayPublisher<SwerveModulePosition> driveModulePositions = driveStateTable.getStructArrayTopic("ModulePositions", SwerveModulePosition.struct).publish();
     private final DoublePublisher driveTimestamp = driveStateTable.getDoubleTopic("Timestamp").publish();
     private final DoublePublisher driveOdometryFrequency = driveStateTable.getDoubleTopic("OdometryFrequency").publish();
+
+    /* Per-module setpoint vs position publishers for AdvantageScope */
+    private static final int kNumModules = 4;
+    private final DoublePublisher[] modSteerSetpointDeg = new DoublePublisher[kNumModules];
+    private final DoublePublisher[] modSteerPositionDeg = new DoublePublisher[kNumModules];
+    private final DoublePublisher[] modSteerErrorDeg = new DoublePublisher[kNumModules];
+    private final DoublePublisher[] modDrivePositionMeters = new DoublePublisher[kNumModules];
+    private final DoublePublisher[] modDriveSetpointMPS = new DoublePublisher[kNumModules];
+    private final DoublePublisher[] modDriveVelocityMPS = new DoublePublisher[kNumModules];
+
+    {
+        for (int i = 0; i < kNumModules; i++) {
+            NetworkTable modTable = driveStateTable.getSubTable("Mod" + i);
+            modSteerSetpointDeg[i] = modTable.getDoubleTopic("SteerSetpointDeg").publish();
+            modSteerPositionDeg[i] = modTable.getDoubleTopic("SteerPositionDeg").publish();
+            modSteerErrorDeg[i] = modTable.getDoubleTopic("SteerErrorDeg").publish();
+            modDrivePositionMeters[i] = modTable.getDoubleTopic("DrivePositionMeters").publish();
+            modDriveSetpointMPS[i] = modTable.getDoubleTopic("DriveSetpointMPS").publish();
+            modDriveVelocityMPS[i] = modTable.getDoubleTopic("DriveVelocityMPS").publish();
+        }
+    }
 
     /* Robot pose for field positioning */
     private final NetworkTable table = inst.getTable("Pose");
@@ -104,24 +126,32 @@ public class Telemetry {
         SignalLogger.writeDouble("DriveState/OdometryPeriod", state.OdometryPeriod, "seconds");
         SignalLogger.writeInteger("DriveState/FailedDaqs", state.FailedDaqs);
 
-        /* Log module 0-3 target vs actual angles and speeds */
-        for (int i = 0; i < 4; i++) {
+        /* Publish and log per-module setpoint vs position for AdvantageScope */
+        for (int i = 0; i < kNumModules; i++) {
             if (state.ModuleTargets != null && i < state.ModuleTargets.length &&
                 state.ModuleStates != null && i < state.ModuleStates.length) {
-                double targetDeg = state.ModuleTargets[i].angle.getDegrees();
-                double actualDeg = state.ModuleStates[i].angle.getDegrees();
+                double setpointDeg = MathUtil.inputModulus(state.ModuleTargets[i].angle.getDegrees(), -180.0, 180.0);
+                double positionDeg = MathUtil.inputModulus(state.ModuleStates[i].angle.getDegrees(), -180.0, 180.0);
+                double errorDeg = MathUtil.inputModulus(setpointDeg - positionDeg, -180.0, 180.0);
                 double targetSpeed = state.ModuleTargets[i].speedMetersPerSecond;
                 double actualSpeed = state.ModuleStates[i].speedMetersPerSecond;
 
-                SmartDashboard.putNumber("Swerve/Mod" + i + "/TargetAngleDeg", targetDeg);
-                SmartDashboard.putNumber("Swerve/Mod" + i + "/ActualAngleDeg", actualDeg);
-                SmartDashboard.putNumber("Swerve/Mod" + i + "/AngleErrorDeg", targetDeg - actualDeg);
-                SmartDashboard.putNumber("Swerve/Mod" + i + "/TargetSpeedMPS", targetSpeed);
-                SmartDashboard.putNumber("Swerve/Mod" + i + "/ActualSpeedMPS", actualSpeed);
+                modSteerSetpointDeg[i].set(setpointDeg);
+                modSteerPositionDeg[i].set(positionDeg);
+                modSteerErrorDeg[i].set(errorDeg);
+                modDriveSetpointMPS[i].set(targetSpeed);
+                modDriveVelocityMPS[i].set(actualSpeed);
 
-                SignalLogger.writeDouble("Swerve/Mod" + i + "/TargetAngleDeg", targetDeg, "deg");
-                SignalLogger.writeDouble("Swerve/Mod" + i + "/ActualAngleDeg", actualDeg, "deg");
-                SignalLogger.writeDouble("Swerve/Mod" + i + "/TargetSpeedMPS", targetSpeed, "mps");
+                SignalLogger.writeDouble("DriveState/Mod" + i + "/SteerSetpointDeg", setpointDeg, "deg");
+                SignalLogger.writeDouble("DriveState/Mod" + i + "/SteerPositionDeg", positionDeg, "deg");
+                SignalLogger.writeDouble("DriveState/Mod" + i + "/SteerErrorDeg", errorDeg, "deg");
+                SignalLogger.writeDouble("DriveState/Mod" + i + "/DriveSetpointMPS", targetSpeed, "mps");
+                SignalLogger.writeDouble("DriveState/Mod" + i + "/DriveVelocityMPS", actualSpeed, "mps");
+            }
+            if (state.ModulePositions != null && i < state.ModulePositions.length) {
+                double drivePosMeters = state.ModulePositions[i].distanceMeters;
+                modDrivePositionMeters[i].set(drivePosMeters);
+                SignalLogger.writeDouble("DriveState/Mod" + i + "/DrivePositionMeters", drivePosMeters, "m");
             }
         }
 

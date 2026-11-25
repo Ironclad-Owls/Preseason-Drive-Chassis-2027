@@ -21,7 +21,7 @@ import frc.robot.subsystems.CommandSwerveDrivetrain;
 public class TunerConstants {
     // Both sets of gains need to be tuned to your individual robot.
     private static final Slot0Configs steerGains = new Slot0Configs()
-        .withKP(60).withKI(0.0).withKD(1.5)
+        .withKP(30).withKI(0.0).withKD(0.0)
         .withKS(0.0).withKV(0.0).withKA(0)
         .withStaticFeedforwardSign(StaticFeedforwardSignValue.UseClosedLoopSign);
     // When using closed-loop control, the drive motor uses the control
@@ -70,9 +70,6 @@ public class TunerConstants {
         )
         .withMotionMagic(
             new MotionMagicConfigs()
-                // Motion Magic Expo parameters calibrated to 26:1 steer ratio:
-                // Expo_kV calculates the target cruise velocity voltage, and Expo_kA controls acceleration/deceleration.
-                // Cruise velocity capped 3x slower (1.33 rps ≈ 480 deg/s) to accommodate RemoteCANcoder latency.
                 .withMotionMagicExpo_kV(2.49)
                 .withMotionMagicExpo_kA(0.36)
                 .withMotionMagicCruiseVelocity(RotationsPerSecond.of(1.33))

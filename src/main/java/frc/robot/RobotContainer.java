@@ -6,17 +6,13 @@ package frc.robot;
 
 import static edu.wpi.first.units.Units.*;
 
-import javax.security.auth.login.FailedLoginException;
-
 import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
 import com.ctre.phoenix6.swerve.SwerveModule.SteerRequestType;
 import com.ctre.phoenix6.swerve.SwerveRequest;
 
 import edu.wpi.first.math.MathUtil;
-import edu.wpi.first.math.filter.LinearFilter;
 import edu.wpi.first.math.filter.SlewRateLimiter;
 import edu.wpi.first.math.geometry.Rotation2d;
-import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
@@ -33,12 +29,11 @@ public class RobotContainer {
     private double MaxAngularRate = RotationsPerSecond.of(0.75).in(RadiansPerSecond); // 3/4 of a rotation per second max angular velocity
  
 
-    // TODO: set these configurations in a dedicated config file.
     public static final double MIN_SPEED_MPS = 0.3;
     public static final double MAX_SPEED_MPS = 3.0;
     public static final double MAX_ACCEL_MPS2 = 0.7 * 1;
-    public static final double MAX_ROT_RAD_PER_SEC = 2.5 * Math.PI; // ~1.25 rot/s top spin
-    public static final double MAX_ROT_ACCEL_RAD_PER_SEC2 = 12.0; // limits rotational jerk on fast reversals
+    public static final double MAX_ROT_RAD_PER_SEC = 2.5 * Math.PI;
+    public static final double MAX_ROT_ACCEL_RAD_PER_SEC2 = 12.0;
     public static final double DEADBAND = 0.08;
     public static final double ROTATION_DEADBAND = 0.15;
     public static final double ANGLE_DEADBAND_RAD = Math.toRadians(2.5);
@@ -46,13 +41,10 @@ public class RobotContainer {
     public static final double ANGLE_SMOOTHING = 0.15;
     public static final double ANGLE_SNAP_RAD = Math.toRadians(45.0);
 
-    // Speed ramp limiter (scalar translation speed) and rotation rate limiter:
     private final SlewRateLimiter speedRate =
         new SlewRateLimiter(MAX_ACCEL_MPS2, -100.0, 0.0);
     private final SlewRateLimiter omegaRate =
         new SlewRateLimiter(MAX_ROT_ACCEL_RAD_PER_SEC2);
-    // 50ms time constant low-pass filter on driver turn input (20ms loop period)
-    private final LinearFilter turnFilter = LinearFilter.singlePoleIIR(0.050, 0.020);
     private boolean wasMoving = false;
     private double smoothedAngle = 0.0;
 
@@ -62,8 +54,6 @@ public class RobotContainer {
         .withSteerRequestType(SteerRequestType.MotionMagicExpo)
         .withDesaturateWheelSpeeds(true);
     private final SwerveRequest.SwerveDriveBrake brake = new SwerveRequest.SwerveDriveBrake();
-    private final SwerveRequest.PointWheelsAt point = new SwerveRequest.PointWheelsAt()
-        .withSteerRequestType(SteerRequestType.MotionMagicExpo);
 
     private final Telemetry logger = new Telemetry(MaxSpeed);
 
@@ -78,9 +68,6 @@ public class RobotContainer {
     private void configureBindings() {
         // Note that X is defined as forward according to WPILib convention,
         // and Y is defined as to the left according to WPILib convention.
-            //Conceptual body of the generated default-drive lambda:
-
-        
         drivetrain.setDefaultCommand(
             // Drivetrain will execute this command periodically
             drivetrain.applyRequest(() -> {
@@ -90,12 +77,10 @@ public class RobotContainer {
                 double rawStrafe = -joystick.getLeftX();
                 double rawTurn = MathUtil.applyDeadband(-joystick.getRightX(),
                     ROTATION_DEADBAND) * MAX_ROT_RAD_PER_SEC * slow;
-                // Log driver raw commands to compare against module actions
                 SmartDashboard.putNumber("Driver/RawFwd", rawFwd);
                 SmartDashboard.putNumber("Driver/RawStrafe", rawStrafe);
                 SmartDashboard.putNumber("Driver/TurnCmd", rawTurn);
 
-                // Radial deadband prevents cardinal-axis snapping when rotating the stick
                 double rawMag = Math.hypot(rawFwd, rawStrafe);
                 double mag = MathUtil.applyDeadband(rawMag, DEADBAND);
                 double vx = 0.0;
@@ -107,17 +92,14 @@ public class RobotContainer {
                     double targetAngle = Math.atan2(rawStrafe, rawFwd);
 
                     if (!wasMoving) {
-                        // Start the ramp immediately at minAllowed when moving from rest
                         speedRate.reset(minAllowed);
                         smoothedAngle = targetAngle;
                         wasMoving = true;
                     } else {
                         double angleError = MathUtil.angleModulus(targetAngle - smoothedAngle);
                         if (Math.abs(angleError) > ANGLE_SNAP_RAD) {
-                            // Snap on quick direction reversals so wheel optimization works immediately
                             smoothedAngle = targetAngle;
                         } else if (Math.abs(angleError) > ANGLE_DEADBAND_RAD) {
-                            // Only update angle if thumbstick moves more than the deadband threshold
                             smoothedAngle = MathUtil.angleModulus(
                                 smoothedAngle + ANGLE_SMOOTHING * angleError
                             );
@@ -134,8 +116,6 @@ public class RobotContainer {
                 } else {
                     wasMoving = false;
                     speedRate.reset(0.0);
-                    // Keep modules locked at their last heading when stopped
-                    // rather than resetting to 0 deg and causing a 90/180-deg whip
                     vx = 0.0;
                     vy = 0.0;
                 }
@@ -154,25 +134,6 @@ public class RobotContainer {
         );
 
         joystick.a().whileTrue(drivetrain.applyRequest(() -> brake));
-        joystick.b().whileTrue(drivetrain.applyRequest(() ->
-            point.withModuleDirection(new Rotation2d(-joystick.getLeftY(), -joystick.getLeftX()))
-        ));
-
-        // Hold X button to command 45 degrees; release X to return to -45 degrees.
-        // A 90-degree difference (45 to -45) avoids the 180-degree flip ambiguity
-        // so the wheel always rotates back and forth across the exact same 90-degree range.
-        final var stepRequestPos = new SwerveRequest.PointWheelsAt()
-            .withModuleDirection(Rotation2d.fromDegrees(45))
-            .withSteerRequestType(SteerRequestType.MotionMagicExpo);
-        final var stepRequestNeg = new SwerveRequest.PointWheelsAt()
-            .withModuleDirection(Rotation2d.fromDegrees(-45))
-            .withSteerRequestType(SteerRequestType.MotionMagicExpo);
-
-        joystick.x().whileTrue(
-            drivetrain.applyRequest(() -> stepRequestPos)
-        ).onFalse(
-            drivetrain.applyRequest(() -> stepRequestNeg)
-        );
 
         // Run SysId routines when holding back/start and X/Y.
         // Note that each routine should be run exactly once in a single log.
