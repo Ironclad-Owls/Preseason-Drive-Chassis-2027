@@ -53,7 +53,8 @@ public class Telemetry {
     private final DoublePublisher driveOdometryFrequency = driveStateTable.getDoubleTopic("OdometryFrequency").publish();
 
     /* Per-module setpoint vs position publishers for AdvantageScope */
-    private static final int kNumModules = 4;
+    private static final String[] kModuleNames = {"ModFL", "ModFR", "ModBL", "ModBR"};
+    private static final int kNumModules = kModuleNames.length;
     private final DoublePublisher[] modSteerSetpointDeg = new DoublePublisher[kNumModules];
     private final DoublePublisher[] modSteerPositionDeg = new DoublePublisher[kNumModules];
     private final DoublePublisher[] modSteerErrorDeg = new DoublePublisher[kNumModules];
@@ -63,7 +64,7 @@ public class Telemetry {
 
     {
         for (int i = 0; i < kNumModules; i++) {
-            NetworkTable modTable = driveStateTable.getSubTable("Mod" + i);
+            NetworkTable modTable = driveStateTable.getSubTable(kModuleNames[i]);
             modSteerSetpointDeg[i] = modTable.getDoubleTopic("SteerSetpointDeg").publish();
             modSteerPositionDeg[i] = modTable.getDoubleTopic("SteerPositionDeg").publish();
             modSteerErrorDeg[i] = modTable.getDoubleTopic("SteerErrorDeg").publish();
@@ -142,16 +143,16 @@ public class Telemetry {
                 modDriveSetpointMPS[i].set(targetSpeed);
                 modDriveVelocityMPS[i].set(actualSpeed);
 
-                SignalLogger.writeDouble("DriveState/Mod" + i + "/SteerSetpointDeg", setpointDeg, "deg");
-                SignalLogger.writeDouble("DriveState/Mod" + i + "/SteerPositionDeg", positionDeg, "deg");
-                SignalLogger.writeDouble("DriveState/Mod" + i + "/SteerErrorDeg", errorDeg, "deg");
-                SignalLogger.writeDouble("DriveState/Mod" + i + "/DriveSetpointMPS", targetSpeed, "mps");
-                SignalLogger.writeDouble("DriveState/Mod" + i + "/DriveVelocityMPS", actualSpeed, "mps");
+                SignalLogger.writeDouble("DriveState/" + kModuleNames[i] + "/SteerSetpointDeg", setpointDeg, "deg");
+                SignalLogger.writeDouble("DriveState/" + kModuleNames[i] + "/SteerPositionDeg", positionDeg, "deg");
+                SignalLogger.writeDouble("DriveState/" + kModuleNames[i] + "/SteerErrorDeg", errorDeg, "deg");
+                SignalLogger.writeDouble("DriveState/" + kModuleNames[i] + "/DriveSetpointMPS", targetSpeed, "mps");
+                SignalLogger.writeDouble("DriveState/" + kModuleNames[i] + "/DriveVelocityMPS", actualSpeed, "mps");
             }
             if (state.ModulePositions != null && i < state.ModulePositions.length) {
                 double drivePosMeters = state.ModulePositions[i].distanceMeters;
                 modDrivePositionMeters[i].set(drivePosMeters);
-                SignalLogger.writeDouble("DriveState/Mod" + i + "/DrivePositionMeters", drivePosMeters, "m");
+                SignalLogger.writeDouble("DriveState/" + kModuleNames[i] + "/DrivePositionMeters", drivePosMeters, "m");
             }
         }
 
