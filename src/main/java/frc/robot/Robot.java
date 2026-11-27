@@ -6,6 +6,7 @@ package frc.robot;
 
 import com.ctre.phoenix6.HootAutoReplay;
 
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.TimedRobot;
@@ -45,6 +46,12 @@ public class Robot extends TimedRobot {
 
         SmartDashboard.putNumber("Battery/Voltage", Math.round(batteryVoltage * 10.0) / 10.0);
         SmartDashboard.putNumber("Battery/MinVoltageSinceEnabled", Math.round(m_minBatteryVoltage * 10.0) / 10.0);
+
+        double headingDeg = MathUtil.inputModulus(
+            -m_robotContainer.drivetrain.getState().Pose.getRotation().getDegrees() + 180.0,
+            0.0, 360.0
+        );
+        SmartDashboard.putNumber("Robot/HeadingDeg", Math.round(headingDeg * 10.0) / 10.0);
     }
 
     @Override

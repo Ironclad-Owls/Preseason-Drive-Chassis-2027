@@ -35,6 +35,7 @@ public class RobotContainer {
     public static final double MIN_SPEED_MPS = 0.3;
     public static final double MAX_SPEED_MPS = 3.0;
     public static final double MAX_ACCEL_MPS2 = 0.7 * 1;
+    public static final double MAX_DECEL_MPS2 = 6.0;
     public static final double MAX_ROT_RAD_PER_SEC = 2.5 * Math.PI;
     public static final double MAX_ROT_ACCEL_RAD_PER_SEC2 = 12.0;
     public static final double DEADBAND = 0.08;
@@ -45,18 +46,28 @@ public class RobotContainer {
     public static final double ANGLE_SNAP_RAD = Math.toRadians(45.0);
 
     private final SlewRateLimiter speedRate =
-        new SlewRateLimiter(MAX_ACCEL_MPS2, -100.0, 0.0);
-    private final SlewRateLimiter omegaRate =
-        new SlewRateLimiter(MAX_ROT_ACCEL_RAD_PER_SEC2);
+        new SlewRateLimiter(MAX_ACCEL_MPS2, -MAX_DECEL_MPS2, 0.0);
     private boolean wasMoving = false;
     private double smoothedAngle = 0.0;
+    private boolean hasTargetHeading = false;
+    private Rotation2d targetHeading = Rotation2d.kZero;
+    private double targetHeadingRateScale = 1.0;
 
     /* Setting up bindings for necessary control of the swerve drive platform */
     private final SwerveRequest.FieldCentric drive = new SwerveRequest.FieldCentric()
         .withDriveRequestType(DriveRequestType.OpenLoopVoltage)
         .withSteerRequestType(SteerRequestType.MotionMagicExpo)
         .withDesaturateWheelSpeeds(true);
+    private final SwerveRequest.FieldCentricFacingAngle facingDrive = new SwerveRequest.FieldCentricFacingAngle()
+        .withDriveRequestType(DriveRequestType.OpenLoopVoltage)
+        .withSteerRequestType(SteerRequestType.MotionMagicExpo)
+        .withDesaturateWheelSpeeds(true);
     private final SwerveRequest.SwerveDriveBrake brake = new SwerveRequest.SwerveDriveBrake();
+
+    {
+        facingDrive.HeadingController.setPID(5.0, 0.0, 0.0);
+        facingDrive.HeadingController.enableContinuousInput(-Math.PI, Math.PI);
+    }
 
     private final Telemetry logger = new Telemetry(MaxSpeed);
 
@@ -82,11 +93,20 @@ public class RobotContainer {
                     ? SLOW_MULTIPLIER : 1.0;
                 double rawFwd = -joystick.getLeftY();
                 double rawStrafe = -joystick.getLeftX();
-                double rawTurn = MathUtil.applyDeadband(-joystick.getRightX(),
-                    ROTATION_DEADBAND) * MAX_ROT_RAD_PER_SEC * slow;
+                double rawTurnX = -joystick.getRightY();
+                double rawTurnY = -joystick.getRightX();
+                double turnMag = Math.hypot(rawTurnX, rawTurnY);
+                if (turnMag > ROTATION_DEADBAND) {
+                    targetHeading = new Rotation2d(rawTurnX, rawTurnY);
+                    double scaledTurn = MathUtil.applyDeadband(
+                        Math.min(turnMag, 1.0), ROTATION_DEADBAND
+                    );
+                    targetHeadingRateScale = MathUtil.interpolate(0.1, 1.0, scaledTurn);
+                    hasTargetHeading = true;
+                }
                 SmartDashboard.putNumber("Driver/RawFwd", rawFwd);
                 SmartDashboard.putNumber("Driver/RawStrafe", rawStrafe);
-                SmartDashboard.putNumber("Driver/TurnCmd", rawTurn);
+                SmartDashboard.putNumber("Driver/TargetHeadingDeg", targetHeading.getDegrees());
 
                 double rawMag = Math.hypot(rawFwd, rawStrafe);
                 double mag = MathUtil.applyDeadband(rawMag, DEADBAND);
@@ -121,15 +141,30 @@ public class RobotContainer {
                     vx = currentSpeed * Math.cos(smoothedAngle);
                     vy = currentSpeed * Math.sin(smoothedAngle);
                 } else {
-                    wasMoving = false;
-                    speedRate.reset(0.0);
-                    vx = 0.0;
-                    vy = 0.0;
+                    double currentSpeed = wasMoving ? speedRate.calculate(0.0) : 0.0;
+                    if (currentSpeed <= 1e-3) {
+                        wasMoving = false;
+                        speedRate.reset(0.0);
+                        vx = 0.0;
+                        vy = 0.0;
+                    } else {
+                        vx = currentSpeed * Math.cos(smoothedAngle);
+                        vy = currentSpeed * Math.sin(smoothedAngle);
+                    }
+                }
+
+                if (hasTargetHeading) {
+                    return facingDrive.withVelocityX(vx)
+                        .withVelocityY(vy)
+                        .withTargetDirection(targetHeading)
+                        .withMaxAbsRotationalRate(
+                            MAX_ROT_RAD_PER_SEC * slow * targetHeadingRateScale
+                        );
                 }
 
                 return drive.withVelocityX(vx)
                     .withVelocityY(vy)
-                    .withRotationalRate(omegaRate.calculate(rawTurn));
+                    .withRotationalRate(0.0);
             })
         );
 
@@ -137,7 +172,12 @@ public class RobotContainer {
         // neutral mode is applied to the drive motors while disabled.
         final var idle = new SwerveRequest.Idle();
         RobotModeTriggers.disabled().whileTrue(
-            drivetrain.applyRequest(() -> idle).ignoringDisable(true)
+            drivetrain.applyRequest(() -> {
+                hasTargetHeading = false;
+                wasMoving = false;
+                speedRate.reset(0.0);
+                return idle;
+            }).ignoringDisable(true)
         );
 
         joystick.a().whileTrue(drivetrain.applyRequest(() -> brake));
@@ -150,7 +190,10 @@ public class RobotContainer {
         joystick.start().and(joystick.x()).whileTrue(drivetrain.sysIdQuasistatic(Direction.kReverse));
 
         // Reset the field-centric heading on Select (Back) button press.
-        joystick.back().onTrue(drivetrain.runOnce(drivetrain::seedFieldCentric));
+        joystick.back().onTrue(drivetrain.runOnce(() -> {
+            drivetrain.seedFieldCentric();
+            hasTargetHeading = false;
+        }));
 
         drivetrain.registerTelemetry(logger::telemeterize);
     }
